@@ -1,25 +1,24 @@
 #!/usr/bin/env python3
 """
-DELTA3 - AI Coding Agent with E2B Sandbox and Gemini LLM
+DELTA3 - AI Coding Agent with Firecracker VMs and Gemini LLM
+Client CLI that connects to DELTA3 API server
 """
 
 import os
 import json
 import sys
+import httpx
 from typing import Optional
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
-from e2b_code_interpreter import Sandbox
 
 load_dotenv()
 
 # === CONFIGURATION ===
-E2B_API_KEY = os.getenv("E2B_API_KEY")
+API_SERVER_URL = os.getenv("DELTA3_API_URL", "http://localhost:8000")
+API_KEY = os.getenv("DELTA3_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
-# Set E2B API key in environment (SDK reads from env)
-os.environ["E2B_API_KEY"] = E2B_API_KEY or ""
 
 # === TOOL DEFINITIONS FOR GEMINI ===
 TOOLS = [
@@ -27,7 +26,7 @@ TOOLS = [
         function_declarations=[
             types.FunctionDeclaration(
                 name="execute_code",
-                description="Execute Python code in the sandbox environment. Use this to run any Python code, install packages, or perform computations.",
+                description="Execute Python code in the VM environment. Use this to run any Python code, install packages, or perform computations.",
                 parameters=types.Schema(
                     type=types.Type.OBJECT,
                     properties={
@@ -41,7 +40,7 @@ TOOLS = [
             ),
             types.FunctionDeclaration(
                 name="read_file",
-                description="Read the contents of a file from the sandbox filesystem.",
+                description="Read the contents of a file from the VM filesystem.",
                 parameters=types.Schema(
                     type=types.Type.OBJECT,
                     properties={
@@ -55,7 +54,7 @@ TOOLS = [
             ),
             types.FunctionDeclaration(
                 name="write_file",
-                description="Write content to a file in the sandbox filesystem.",
+                description="Write content to a file in the VM filesystem.",
                 parameters=types.Schema(
                     type=types.Type.OBJECT,
                     properties={
@@ -73,7 +72,7 @@ TOOLS = [
             ),
             types.FunctionDeclaration(
                 name="run_terminal",
-                description="Run a shell command in the sandbox terminal.",
+                description="Run a shell command in the VM terminal.",
                 parameters=types.Schema(
                     type=types.Type.OBJECT,
                     properties={
@@ -87,13 +86,13 @@ TOOLS = [
             ),
             types.FunctionDeclaration(
                 name="list_files",
-                description="List files in a directory in the sandbox.",
+                description="List files in a directory in the VM.",
                 parameters=types.Schema(
                     type=types.Type.OBJECT,
                     properties={
                         "path": types.Schema(
                             type=types.Type.STRING,
-                            description="The directory path to list (default: current directory)"
+                            description="The directory path to list (default: /home/user)"
                         )
                     },
                     required=[]
@@ -103,52 +102,91 @@ TOOLS = [
     )
 ]
 
-SYSTEM_PROMPT = """You are an AI coding assistant with access to a sandboxed coding environment. 
+SYSTEM_PROMPT = """You are an AI coding assistant with access to a Firecracker microVM coding environment. 
 You can execute Python code, read/write files, and run terminal commands.
 
 IMPORTANT WORKFLOW FOR CREATING REUSABLE CODE:
 1. Use write_file to save Python code to /home/user/filename.py
 2. Use run_terminal with "python /home/user/filename.py" to execute the file
-3. Files persist in the sandbox - you can import them later!
+3. Files persist in the VM and are saved to S3 when you disconnect!
 
 Example workflow to create and use a module:
 1. write_file(path="/home/user/utils.py", content="def greet(name): return f'Hello {name}'")
 2. run_terminal(command="python -c 'from utils import greet; print(greet(\"World\"))'")
 
-Or run a script:
-1. write_file(path="/home/user/script.py", content="print('Hello!')")
-2. run_terminal(command="python /home/user/script.py")
-
 Available tools:
 - execute_code: Run Python code directly (good for quick calculations)
-- write_file: Save code/files to /home/user/ (PERSISTENT)
+- write_file: Save code/files to /home/user/ (PERSISTENT via S3)
 - read_file: Read file contents
 - run_terminal: Run shell commands including "python filename.py"
 - list_files: List directory contents (default: /home/user)
 
-The working directory is /home/user. Files you create there persist across requests.
+The working directory is /home/user. Files you create persist to S3 and survive restarts.
 Always verify your work by checking outputs."""
 
 
+class Delta3Client:
+    """HTTP client for DELTA3 API server."""
+    
+    def __init__(self, api_url: str, api_key: str):
+        self.api_url = api_url.rstrip('/')
+        self.api_key = api_key
+        self.headers = {"X-API-Key": api_key}
+        self.client = httpx.Client(timeout=60.0)
+    
+    def _request(self, method: str, endpoint: str, json_data: dict = None) -> dict:
+        """Make HTTP request to API server."""
+        url = f"{self.api_url}{endpoint}"
+        response = self.client.request(method, url, headers=self.headers, json=json_data)
+        
+        if response.status_code >= 400:
+            raise Exception(f"API Error {response.status_code}: {response.text}")
+        
+        return response.json()
+    
+    def start_vm(self) -> dict:
+        return self._request("POST", "/vm/start")
+    
+    def stop_vm(self, save: bool = True) -> dict:
+        return self._request("POST", f"/vm/stop?save={str(save).lower()}")
+    
+    def vm_status(self) -> dict:
+        return self._request("GET", "/vm/status")
+    
+    def execute_code(self, code: str) -> dict:
+        return self._request("POST", "/execute/code", {"code": code})
+    
+    def execute_command(self, command: str) -> dict:
+        return self._request("POST", "/execute/command", {"command": command})
+    
+    def write_file(self, path: str, content: str) -> dict:
+        return self._request("POST", "/files/write", {"path": path, "content": content})
+    
+    def read_file(self, path: str) -> dict:
+        return self._request("POST", "/files/read", {"path": path})
+    
+    def list_files(self, path: str = "/home/user") -> dict:
+        return self._request("GET", f"/files/list?path={path}")
+
+
 class Delta3Agent:
-    def __init__(self, sandbox_id: Optional[str] = None):
-        """Initialize the agent with E2B sandbox and Gemini."""
-        if not E2B_API_KEY:
-            raise ValueError("E2B_API_KEY not set in environment")
+    def __init__(self):
+        """Initialize the agent with API client and Gemini."""
+        if not API_KEY:
+            raise ValueError("DELTA3_API_KEY not set in environment")
         if not GEMINI_API_KEY:
             raise ValueError("GEMINI_API_KEY not set in environment")
         
         # Configure Gemini client
-        self.client = genai.Client(api_key=GEMINI_API_KEY)
+        self.gemini = genai.Client(api_key=GEMINI_API_KEY)
         
-        # Initialize or resume sandbox
-        print("🔄 Starting sandbox...")
-        if sandbox_id:
-            self.sandbox = Sandbox.connect(sandbox_id)
-            print(f"✅ Reconnected to sandbox: {sandbox_id}")
-        else:
-            self.sandbox = Sandbox.create(timeout=300)
-            print(f"✅ Sandbox ready: {self.sandbox.sandbox_id}")
+        # Initialize API client
+        self.client = Delta3Client(API_SERVER_URL, API_KEY)
+        
+        # Start VM
+        print("🔄 Starting VM...")
+        result = self.client.start_vm()
+        print(f"✅ VM ready: {result.get('vm_id', 'unknown')}")
         
         # Chat history for context
         self.history = []
@@ -157,43 +195,35 @@ class Delta3Agent:
         """Execute a tool call and return the result."""
         try:
             if tool_name == "execute_code":
-                result = self.sandbox.run_code(args["code"])
+                result = self.client.execute_code(args["code"])
                 output = ""
-                if result.logs.stdout:
-                    output += f"stdout:\n{result.logs.stdout}\n"
-                if result.logs.stderr:
-                    output += f"stderr:\n{result.logs.stderr}\n"
-                if result.error:
-                    output += f"error:\n{result.error.name}: {result.error.value}\n"
-                if result.results:
-                    for r in result.results:
-                        if hasattr(r, 'text') and r.text:
-                            output += f"result: {r.text}\n"
+                if result.get("stdout"):
+                    output += f"stdout:\n{result['stdout']}\n"
+                if result.get("stderr"):
+                    output += f"stderr:\n{result['stderr']}\n"
                 return output if output else "Code executed successfully (no output)"
             
             elif tool_name == "read_file":
-                content = self.sandbox.files.read(args["path"])
-                return content
+                result = self.client.read_file(args["path"])
+                return result.get("content", "")
             
             elif tool_name == "write_file":
-                self.sandbox.files.write(args["path"], args["content"])
+                result = self.client.write_file(args["path"], args["content"])
                 return f"File written: {args['path']}"
             
             elif tool_name == "run_terminal":
-                # Run from /home/user directory so relative paths work
-                cmd = f"cd /home/user && {args['command']}"
-                result = self.sandbox.commands.run(cmd)
+                result = self.client.execute_command(f"cd /home/user && {args['command']}")
                 output = ""
-                if result.stdout:
-                    output += result.stdout
-                if result.stderr:
-                    output += f"\nstderr: {result.stderr}"
+                if result.get("stdout"):
+                    output += result["stdout"]
+                if result.get("stderr"):
+                    output += f"\nstderr: {result['stderr']}"
                 return output if output else "Command completed (no output)"
             
             elif tool_name == "list_files":
                 path = args.get("path", "/home/user")
-                files = self.sandbox.files.list(path)
-                return "\n".join([f.name for f in files])
+                result = self.client.list_files(path)
+                return result.get("files", "")
             
             else:
                 return f"Unknown tool: {tool_name}"
@@ -223,7 +253,7 @@ class Delta3Agent:
             import time
             for attempt in range(3):
                 try:
-                    response = self.client.models.generate_content(
+                    response = self.gemini.models.generate_content(
                         model="gemini-2.0-flash",
                         contents=self.history,
                         config=types.GenerateContentConfig(
@@ -283,43 +313,34 @@ class Delta3Agent:
         
         return final_text if final_text else "Max iterations reached"
     
-    def get_sandbox_id(self) -> str:
-        """Get the current sandbox ID for persistence."""
-        return self.sandbox.sandbox_id
-    
-    def close(self):
-        """Close the sandbox (optional - keeps it alive for persistence)."""
-        pass
+    def save_and_stop(self):
+        """Save environment to S3 and stop VM."""
+        print("💾 Saving environment to S3...")
+        self.client.stop_vm(save=True)
+        print("✅ Environment saved!")
 
 
 def main():
     """Main CLI entry point."""
     print("=" * 50)
-    print("  DELTA3 - AI Coding Agent")
+    print("  DELTA3 - AI Coding Agent (Firecracker)")
     print("=" * 50)
     
-    # Check for sandbox ID for persistence
-    sandbox_id = None
-    sandbox_file = ".sandbox_id"
-    
-    if os.path.exists(sandbox_file):
-        with open(sandbox_file, "r") as f:
-            sandbox_id = f.read().strip()
-        print(f"📁 Found existing sandbox: {sandbox_id}")
-        try:
-            agent = Delta3Agent(sandbox_id=sandbox_id)
-        except Exception as e:
-            print(f"⚠️  Could not reconnect, starting new sandbox: {e}")
-            agent = Delta3Agent()
-    else:
+    try:
         agent = Delta3Agent()
+    except Exception as e:
+        print(f"❌ Failed to start: {e}")
+        print("\nMake sure you have:")
+        print("  1. DELTA3_API_URL set (default: http://localhost:8000)")
+        print("  2. DELTA3_API_KEY set (get from /auth/api-key)")
+        print("  3. GEMINI_API_KEY set")
+        sys.exit(1)
     
-    # Save sandbox ID for persistence
-    with open(sandbox_file, "w") as f:
-        f.write(agent.get_sandbox_id())
-    
-    print(f"\n💾 Sandbox ID saved to {sandbox_file}")
-    print("Type 'quit' or 'exit' to stop. Type 'new' for fresh sandbox.\n")
+    print("\nCommands:")
+    print("  quit/exit - Save to S3 and exit")
+    print("  save      - Save current state to S3")
+    print("  nosave    - Exit without saving")
+    print()
     
     while True:
         try:
@@ -329,23 +350,29 @@ def main():
                 continue
             
             if user_input.lower() in ['quit', 'exit']:
-                print("👋 Goodbye! Sandbox will remain available for reconnection.")
+                agent.save_and_stop()
+                print("👋 Goodbye!")
                 break
             
-            if user_input.lower() == 'new':
-                agent.sandbox.kill()
-                os.remove(sandbox_file)
-                agent = Delta3Agent()
-                with open(sandbox_file, "w") as f:
-                    f.write(agent.get_sandbox_id())
-                print("🆕 New sandbox created!")
+            if user_input.lower() == 'save':
+                agent.client.stop_vm(save=True)
+                print("💾 Saved to S3!")
+                agent.client.start_vm()
+                print("✅ VM restarted")
                 continue
+            
+            if user_input.lower() == 'nosave':
+                agent.client.stop_vm(save=False)
+                print("👋 Goodbye! (not saved)")
+                break
             
             response = agent.process_request(user_input)
             print(f"\n🤖 Assistant: {response}")
             
         except KeyboardInterrupt:
-            print("\n👋 Interrupted. Goodbye!")
+            print("\n💾 Saving and exiting...")
+            agent.save_and_stop()
+            print("👋 Goodbye!")
             break
         except Exception as e:
             print(f"\n❌ Error: {e}")
