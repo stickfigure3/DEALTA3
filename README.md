@@ -94,9 +94,23 @@ python agent.py
 | `run_terminal` | Execute shell commands |
 | `list_files` | List directory contents |
 
-### File Storage
+### File Storage & Persistence
 
-Files are saved in the E2B sandbox at `/home/user/`. They persist as long as the sandbox is alive (up to 24 hours for Pro, 1 hour for free tier).
+Files are saved in the E2B sandbox at `/home/user/`.
+
+**Persistence behavior:**
+- ✅ Files persist when you `quit` the agent (sandbox stays alive)
+- ✅ Files persist when you reconnect using saved `.sandbox_id`
+- ❌ Files are lost if you type `new` (creates fresh sandbox)
+- ❌ Files are lost if sandbox times out (default 5 min, max 24h Pro / 1h Free)
+
+**Tested example:**
+```
+Step 1: Write file → persist_test.py created
+Step 2: Quit agent
+Step 3: Restart agent → reconnects to same sandbox
+Step 4: File still exists, runs successfully: "I survived!"
+```
 
 ## Cost
 

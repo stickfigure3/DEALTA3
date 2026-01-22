@@ -1,6 +1,9 @@
 # Private notes - never push
 private_readme.md
 
+# Sandbox state
+.sandbox_id
+
 # Environment
 .env
 .env.local
