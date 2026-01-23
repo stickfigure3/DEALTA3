@@ -20,3 +20,4 @@ node_modules/
 # IDE
 .idea/
 *.swp
+delta3-key.pem

@@ -212,7 +212,7 @@ class Delta3Agent:
                 return f"File written: {args['path']}"
             
             elif tool_name == "run_terminal":
-                result = self.client.execute_command(f"cd /home/user && {args['command']}")
+                result = self.client.execute_command(args['command'])
                 output = ""
                 if result.get("stdout"):
                     output += result["stdout"]
