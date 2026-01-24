@@ -164,12 +164,58 @@ DELTA3/
     └── setup_firecracker.sh  # Infrastructure setup
 ```
 
+## Team Setup
+
+Each team member needs their own account:
+
+### For Team Admin (you):
+1. Share the server IP with your team
+2. Each member registers their own account
+
+### For Team Members:
+```bash
+# 1. Clone repo
+git clone https://github.com/stickfigure3/DEALTA3.git
+cd DEALTA3
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# 2. Register (use team server IP)
+curl -X POST http://SERVER_IP:8000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"username": "YOUR_NAME", "password": "YOUR_PASSWORD"}'
+
+# 3. Get API key
+TOKEN=$(curl -s -X POST http://SERVER_IP:8000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "YOUR_NAME", "password": "YOUR_PASSWORD"}' | jq -r '.token')
+
+curl -X POST http://SERVER_IP:8000/auth/api-key \
+  -H "Authorization: Bearer $TOKEN"
+
+# 4. Create .env
+cat > .env << EOF
+DELTA3_API_URL=http://SERVER_IP:8000
+DELTA3_API_KEY=delta3_your_key_here
+GEMINI_API_KEY=your_gemini_key
+EOF
+
+# 5. Run
+python agent.py
+```
+
+### Each Team Member Gets:
+- Their own isolated workspace on the server
+- Their own API key
+- Their own files (not shared between users)
+
 ## Security Notes
 
 - Each user gets isolated workspace
 - API keys required for all operations
 - JWT tokens expire in 30 days
-- Server should be behind firewall (only allow your IP)
+- Server should be behind firewall (only allow team IPs)
 
 ## Cost
 
