@@ -160,20 +160,38 @@ async def vm_status(user_id: str = Depends(verify_api_key)):
 
 # === Code Execution Endpoints ===
 def _execute_in_vm(user_id: str, command: str) -> dict:
-    """Execute command in user's VM via serial console."""
+    """Execute command in user's VM via chroot (mounting rootfs)."""
     vm = vm_manager.get_vm(user_id)
     if not vm or not vm.is_running():
         raise HTTPException(status_code=400, detail="VM not running. Call /vm/start first")
     
-    # Execute via SSH or serial (simplified - in production use proper SSH)
-    # For now, we'll use a wrapper script that communicates with the VM
+    # Get user's rootfs path
+    rootfs_path = vm_manager._get_user_rootfs_path(user_id)
+    if not rootfs_path.exists():
+        return {"stdout": "", "stderr": "User rootfs not found", "exit_code": -1}
+    
+    # Mount point for chroot
+    mount_point = f"/tmp/firecracker-chroot-{user_id}"
+    
     try:
+        # Create mount point
+        Path(mount_point).mkdir(parents=True, exist_ok=True)
+        
+        # Mount rootfs (if not already mounted)
+        if not os.path.ismount(mount_point):
+            subprocess.run(["sudo", "mount", str(rootfs_path), mount_point], 
+                         check=False, capture_output=True)
+        
+        # Execute command in chroot
+        # Use bash -c to handle complex commands
         result = subprocess.run(
-            ["ssh", "-o", "StrictHostKeyChecking=no", f"user@{vm.vm_id}", command],
+            ["sudo", "chroot", mount_point, "/bin/bash", "-c", 
+             f"cd /home/user && {command}"],
             capture_output=True,
             text=True,
             timeout=30
         )
+        
         return {
             "stdout": result.stdout,
             "stderr": result.stderr,

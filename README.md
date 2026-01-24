@@ -92,7 +92,7 @@ TOKEN=$(curl -s -X POST http://YOUR_EC2_IP:8000/auth/login \
   -d '{"username": "yourname", "password": "yourpassword"}' | jq -r '.token')
 
 # Get API key
-curl -X POST http://YOUR_EC2_IP:8000/auth/api-key \
+curl -X POST http://54.224.26.118:8000/auth/api-key \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -101,7 +101,7 @@ curl -X POST http://YOUR_EC2_IP:8000/auth/api-key \
 Create `.env` in your local DELTA3 folder:
 
 ```bash
-DELTA3_API_URL=http://YOUR_EC2_IP:8000
+DELTA3_API_URL=http://54.224.26.118:8000
 DELTA3_API_KEY=delta3_xxxxxxxxxxxx
 GEMINI_API_KEY=your_gemini_api_key
 ```
@@ -187,16 +187,16 @@ curl -X POST http://SERVER_IP:8000/auth/register \
   -d '{"username": "YOUR_NAME", "password": "YOUR_PASSWORD"}'
 
 # 3. Get API key
-TOKEN=$(curl -s -X POST http://SERVER_IP:8000/auth/login \
+TOKEN=$(curl -s -X POST http://54.224.26.118:8000/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username": "YOUR_NAME", "password": "YOUR_PASSWORD"}' | jq -r '.token')
 
-curl -X POST http://SERVER_IP:8000/auth/api-key \
+curl -X POST http://54.224.26.118:8000/auth/api-key \
   -H "Authorization: Bearer $TOKEN"
 
 # 4. Create .env
 cat > .env << EOF
-DELTA3_API_URL=http://SERVER_IP:8000
+DELTA3_API_URL=http://54.224.26.118:8000
 DELTA3_API_KEY=delta3_your_key_here
 GEMINI_API_KEY=your_gemini_key
 EOF
