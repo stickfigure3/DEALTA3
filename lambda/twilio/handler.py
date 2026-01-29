@@ -5,14 +5,10 @@ Receives SMS messages and responds via Gemini.
 
 import json
 import os
-import sys
 import urllib.parse
 
-# Add shared module to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-
-from shared import storage
-from shared.gemini import GeminiAgent
+import storage
+from gemini import GeminiAgent
 
 # Twilio credentials from environment
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID")

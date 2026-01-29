@@ -5,13 +5,9 @@ Handles chat messages and code execution via Gemini.
 
 import json
 import os
-import sys
 
-# Add shared module to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-
-from shared import storage
-from shared.gemini import GeminiAgent
+import storage
+from gemini import GeminiAgent
 
 
 def response(status_code: int, body: dict) -> dict:

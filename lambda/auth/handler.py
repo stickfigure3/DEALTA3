@@ -5,12 +5,8 @@ Handles user registration, login, and session management.
 
 import json
 import os
-import sys
 
-# Add shared module to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-
-from shared import storage
+import storage
 
 
 def response(status_code: int, body: dict, headers: dict = None) -> dict:
