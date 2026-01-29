@@ -6,11 +6,52 @@ A serverless AI coding environment powered by Google Gemini. Write, run, and deb
 
 - 🤖 **Gemini AI** - Google's most capable AI for coding
 - ⚡ **Instant Execution** - Run Python code in seconds
-- 💾 **Persistent Storage** - Files saved across sessions
+- 💾 **Persistent Environment** - Files AND chat context saved across sessions
 - 🌐 **Web Interface** - Beautiful, responsive UI
 - 📱 **SMS Support** - Code via text messages (Twilio)
 - 🔐 **User Accounts** - Isolated workspaces per user
 - 💰 **Pay-per-use** - Serverless = pay only when used
+
+## How Persistence Works
+
+Each user gets a persistent workspace that survives across Lambda invocations:
+
+```
+User Request → Lambda Invocation
+                    ↓
+            ┌──────────────────┐
+            │ 1. Restore files │ ← Download from S3
+            │    from S3       │
+            └──────────────────┘
+                    ↓
+            ┌──────────────────┐
+            │ 2. Load chat     │ ← Load last 20 messages
+            │    history       │   into Gemini context
+            └──────────────────┘
+                    ↓
+            ┌──────────────────┐
+            │ 3. Process       │ ← Gemini sees your files
+            │    message       │   and conversation
+            └──────────────────┘
+                    ↓
+            ┌──────────────────┐
+            │ 4. Sync files    │ ← Upload changes to S3
+            │    to S3         │
+            └──────────────────┘
+                    ↓
+            ┌──────────────────┐
+            │ 5. Save chat     │ ← Persist conversation
+            │    history       │
+            └──────────────────┘
+```
+
+**What persists:**
+- ✅ All files you create (Python, text, etc.)
+- ✅ File modifications
+- ✅ Chat history (last 100 messages)
+- ✅ Context between messages (AI remembers what you discussed)
+
+**Storage location:** `s3://bucket/users/{user_id}/workspace/`
 
 ## Architecture
 
@@ -101,6 +142,37 @@ DELTA3/
 ├── requirements.txt
 ├── env.example
 └── README.md
+```
+
+## AI Tools Available
+
+The AI has access to these tools for code execution:
+
+| Tool | Description |
+|------|-------------|
+| `execute_python` | Run Python code directly |
+| `execute_shell` | Run shell commands |
+| `write_file` | Save files (persisted to S3) |
+| `read_file` | Read file contents |
+| `list_files` | List files in workspace |
+| `delete_file` | Delete files |
+
+**Example conversation:**
+```
+You: Create a calculator module and test it
+
+AI: [Uses write_file to create calculator.py]
+    [Uses execute_python to test it]
+    
+    ✅ Created calculator.py with add, subtract, multiply, divide functions.
+    Test results: 2+2=4, 10-3=7, 4*5=20, 10/2=5.0
+
+You: Now add a power function
+
+AI: [Uses read_file to see current code]
+    [Uses write_file to update it]
+    
+    ✅ Added power(base, exp) function. Test: 2^3=8
 ```
 
 ## API Endpoints
