@@ -1,23 +1,53 @@
 # Private notes - never push
 private_readme.md
 
-# Sandbox state
-.sandbox_id
-
 # Environment
 .env
 .env.local
+.env.*.local
 
 # Python
 __pycache__/
 *.py[cod]
+*$py.class
 venv/
 .venv/
+*.egg-info/
+dist/
+build/
 
 # Node
 node_modules/
 
+# AWS SAM
+.aws-sam/
+samconfig.toml
+
 # IDE
 .idea/
+.vscode/
 *.swp
+*.swo
+*~
+
+# Keys & credentials
+*.pem
+*.key
 delta3-key.pem
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test coverage
+.coverage
+htmlcov/
+
+# Temp files
+*.tmp
+*.temp
+.tmp/

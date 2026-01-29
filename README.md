@@ -1,232 +1,188 @@
-# DELTA3 - AI Coding Agent
+# DELTA3 - AI Coding Assistant
 
-An AI coding assistant powered by Google Gemini that executes code on a remote server. Write code, run scripts, and build projects using natural language.
+A serverless AI coding environment powered by Google Gemini. Write, run, and debug code through a web interface or SMS.
+
+## Features
+
+- 🤖 **Gemini AI** - Google's most capable AI for coding
+- ⚡ **Instant Execution** - Run Python code in seconds
+- 💾 **Persistent Storage** - Files saved across sessions
+- 🌐 **Web Interface** - Beautiful, responsive UI
+- 📱 **SMS Support** - Code via text messages (Twilio)
+- 🔐 **User Accounts** - Isolated workspaces per user
+- 💰 **Pay-per-use** - Serverless = pay only when used
 
 ## Architecture
 
 ```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│  Your Mac    │     │   Gemini     │     │   EC2        │
-│  (CLI)       │────▶│   API        │     │   Server     │
-│              │◀────│              │     │              │
-└──────────────┘     └──────────────┘     └──────────────┘
-       │                                         ▲
-       │         HTTP API calls                  │
-       └─────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                      DELTA3 v3.0                                │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│   ┌──────────┐    ┌──────────┐    ┌──────────┐                 │
+│   │  Web UI  │    │ Twilio   │    │  Future  │                 │
+│   │          │    │  SMS     │    │ Channels │                 │
+│   └────┬─────┘    └────┬─────┘    └────┬─────┘                 │
+│        │               │               │                        │
+│        └───────────────┼───────────────┘                        │
+│                        ▼                                        │
+│            ┌───────────────────────┐                            │
+│            │     API Gateway       │                            │
+│            └───────────┬───────────┘                            │
+│                        ▼                                        │
+│   ┌─────────────────────────────────────────────────────┐      │
+│   │                  Lambda Functions                    │      │
+│   │  ┌────────────┐  ┌────────────┐  ┌────────────┐    │      │
+│   │  │   Auth     │  │   Chat     │  │  Twilio    │    │      │
+│   │  └────────────┘  └────────────┘  └────────────┘    │      │
+│   └─────────────────────────────────────────────────────┘      │
+│                        │                                        │
+│           ┌────────────┼────────────┐                          │
+│           ▼            ▼            ▼                          │
+│    ┌──────────┐  ┌──────────┐  ┌──────────┐                   │
+│    │ DynamoDB │  │    S3    │  │  Gemini  │                   │
+│    │  Users   │  │  Files   │  │   API    │                   │
+│    └──────────┘  └──────────┘  └──────────┘                   │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
 ```
-
-1. You type a request in the CLI
-2. Gemini AI decides what tools to use
-3. Tools execute on your EC2 server
-4. Results return to you
-
-## Features
-
-- 🤖 **Natural Language → Code** - Describe what you want, AI writes & runs it
-- 📁 **File Operations** - Create, read, edit files
-- 💻 **Run Commands** - Execute Python, shell commands
-- 🔐 **User Auth** - JWT tokens + API keys
-- 🖥️ **Remote Execution** - Code runs on EC2, not your machine
 
 ## Quick Start
 
 ### Prerequisites
-- Python 3.9+
-- AWS EC2 instance (m5.metal for Firecracker, or any for subprocess mode)
-- Google Gemini API key
 
-### 1. Clone & Install
+- AWS Account
+- AWS CLI configured (`aws configure`)
+- AWS SAM CLI (`brew install aws-sam-cli`)
+- Google Gemini API key ([Get one free](https://makersuite.google.com/app/apikey))
 
-```bash
-git clone https://github.com/stickfigure3/DEALTA3.git
-cd DEALTA3
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-### 2. Server Setup (EC2)
-
-SSH into your EC2 instance:
+### Deploy
 
 ```bash
-# Clone repo on server
+# Clone the repo
 git clone https://github.com/stickfigure3/DEALTA3.git
 cd DEALTA3
 
-# Install dependencies
-sudo apt-get update && sudo apt-get install -y python3 python3-pip python3.12-venv
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+# Deploy to AWS
+chmod +x deploy.sh
+./deploy.sh dev
 
-# (Optional) Install Firecracker for VM isolation
-chmod +x server/setup_firecracker.sh
-sudo ./server/setup_firecracker.sh
-
-# Create config
-cat > .env << 'EOF'
-SECRET_KEY=your_random_secret_key_here
-S3_BUCKET=your-bucket-name
-AWS_REGION=us-east-1
-EOF
-
-# Start server
-cd server
-python3 api.py
+# Output will show your URLs
 ```
 
-Server runs on port 8000.
+### Use
 
-### 3. Register & Get API Key
+1. Visit the frontend URL from deployment output
+2. Create an account
+3. Add your Gemini API key
+4. Start chatting!
 
-```bash
-# Register
-curl -X POST http://YOUR_EC2_IP:8000/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"username": "yourname", "password": "yourpassword"}'
-
-# Login (get token)
-TOKEN=$(curl -s -X POST http://YOUR_EC2_IP:8000/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username": "yourname", "password": "yourpassword"}' | jq -r '.token')
-
-# Get API key
-curl -X POST http://54.224.26.118:8000/auth/api-key \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-### 4. Configure Client
-
-Create `.env` in your local DELTA3 folder:
-
-```bash
-DELTA3_API_URL=http://54.224.26.118:8000
-DELTA3_API_KEY=delta3_xxxxxxxxxxxx
-GEMINI_API_KEY=your_gemini_api_key
-```
-
-### 5. Run
-
-```bash
-source venv/bin/activate
-python agent.py
-```
-
-## Usage Examples
+## Project Structure
 
 ```
-🎯 You: Create a fibonacci function and test it with n=10
-
-🔧 write_file({"path": "/home/user/fib.py", ...})
-📤 Result: File written
-
-🔧 run_terminal({"command": "python fib.py"})
-📤 Result: [0, 1, 1, 2, 3, 5, 8, 13, 21, 34]
-
-🤖 Assistant: Created fib.py and ran it. Result shows first 10 Fibonacci numbers.
+DELTA3/
+├── frontend/               # Web UI (static HTML/CSS/JS)
+│   ├── index.html
+│   ├── style.css
+│   └── app.js
+├── lambda/                 # AWS Lambda functions
+│   ├── auth/              # Authentication
+│   │   └── handler.py
+│   ├── chat/              # Chat + code execution
+│   │   └── handler.py
+│   ├── twilio/            # SMS webhook
+│   │   └── handler.py
+│   └── shared/            # Shared utilities
+│       ├── storage.py     # DynamoDB + S3
+│       └── gemini.py      # Gemini AI
+├── infrastructure/        # CloudFormation/SAM
+│   └── template.yaml
+├── deploy.sh              # Deployment script
+├── requirements.txt
+├── env.example
+└── README.md
 ```
-
-### Commands
-| Command | Description |
-|---------|-------------|
-| `quit` | Save and exit |
-| `save` | Save current state |
-| `nosave` | Exit without saving |
 
 ## API Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/auth/register` | POST | Create account |
-| `/auth/login` | POST | Get JWT token |
-| `/auth/api-key` | POST | Generate API key |
-| `/vm/start` | POST | Start workspace |
-| `/vm/stop` | POST | Stop workspace |
-| `/execute/code` | POST | Run Python code |
-| `/execute/command` | POST | Run shell command |
-| `/files/write` | POST | Write file |
+| `/auth/login` | POST | Login, get session |
+| `/auth/me` | GET | Get user info |
+| `/auth/gemini-key` | POST | Set Gemini API key |
+| `/chat/send` | POST | Send message to AI |
+| `/chat/history` | GET | Get chat history |
+| `/chat/clear` | POST | Clear chat history |
+| `/files/list` | GET | List user files |
 | `/files/read` | POST | Read file |
-| `/files/list` | GET | List files |
-| `/health` | GET | Health check |
+| `/files/write` | POST | Write file |
+| `/twilio/webhook` | POST | Twilio SMS webhook |
 
-## Project Structure
+## SMS Commands (Twilio)
 
-```
-DELTA3/
-├── agent.py              # CLI client
-├── requirements.txt      # Dependencies
-├── .env                  # Local config (gitignored)
-├── env.example           # Config template
-└── server/
-    ├── api.py            # FastAPI server
-    ├── vm_manager.py     # VM lifecycle (Firecracker)
-    └── setup_firecracker.sh  # Infrastructure setup
-```
+| Command | Description |
+|---------|-------------|
+| `HELP` | Show available commands |
+| `REGISTER <email> <password>` | Create account |
+| `LINK <email> <password>` | Link phone to account |
+| `KEY <gemini-api-key>` | Set Gemini API key |
+| `CLEAR` | Clear chat history |
+| Any other message | Chat with AI |
 
-## Team Setup
+## Local Development
 
-Each team member needs their own account:
-
-### For Team Admin (you):
-1. Share the server IP with your team
-2. Each member registers their own account
-
-### For Team Members:
 ```bash
-# 1. Clone repo
-git clone https://github.com/stickfigure3/DEALTA3.git
-cd DEALTA3
+# Install dependencies
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# 2. Register (use team server IP)
-curl -X POST http://SERVER_IP:8000/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"username": "YOUR_NAME", "password": "YOUR_PASSWORD"}'
+# Set environment variables
+cp env.example .env
+# Edit .env with your values
 
-# 3. Get API key
-TOKEN=$(curl -s -X POST http://54.224.26.118:8000/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username": "YOUR_NAME", "password": "YOUR_PASSWORD"}' | jq -r '.token')
+# Run frontend locally
+cd frontend
+python3 -m http.server 3000
 
-curl -X POST http://54.224.26.118:8000/auth/api-key \
-  -H "Authorization: Bearer $TOKEN"
-
-# 4. Create .env
-cat > .env << EOF
-DELTA3_API_URL=http://54.224.26.118:8000
-DELTA3_API_KEY=delta3_your_key_here
-GEMINI_API_KEY=your_gemini_key
-EOF
-
-# 5. Run
-python agent.py
+# For Lambda testing, use SAM local
+cd infrastructure
+sam local start-api
 ```
 
-### Each Team Member Gets:
-- Their own isolated workspace on the server
-- Their own API key
-- Their own files (not shared between users)
+## Cost Estimate
 
-## Security Notes
+| Service | Estimated Cost |
+|---------|---------------|
+| Lambda | ~$0.20 per million requests |
+| API Gateway | ~$1.00 per million requests |
+| DynamoDB | ~$1.25/month (on-demand) |
+| S3 | ~$0.023/GB/month |
+| **Total** | **~$5-10/month** for light use |
 
-- Each user gets isolated workspace
-- API keys required for all operations
-- JWT tokens expire in 30 days
-- Server should be behind firewall (only allow team IPs)
+Compare to always-on EC2: ~$4.60/hr for m5.metal = $110/day
 
-## Cost
+## Security
 
-| Resource | Cost |
-|----------|------|
-| EC2 m5.metal | ~$4.60/hr (stop when not using!) |
-| EC2 t3.medium | ~$0.04/hr (no Firecracker) |
-| Gemini API | Free tier available |
+- Each user has isolated storage
+- Gemini API keys encrypted at rest
+- Sessions expire after 7 days
+- API keys never logged
+- HTTPS enforced via API Gateway
 
-**Tip:** Use smaller instance without Firecracker for development, m5.metal only for production isolation.
+## Roadmap
+
+- [ ] Slack integration
+- [ ] Discord bot
+- [ ] Multiple language support (JS, Go, etc.)
+- [ ] Collaborative workspaces
+- [ ] Custom model support
 
 ## License
 
 MIT
+
+---
+
+Built with ❤️ using AWS Lambda, DynamoDB, S3, and Google Gemini

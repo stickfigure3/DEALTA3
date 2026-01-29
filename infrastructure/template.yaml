@@ -1,0 +1,266 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: DELTA3 - AI Coding Assistant Infrastructure
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+  
+  TwilioAccountSid:
+    Type: String
+    Default: ''
+    Description: Twilio Account SID (optional)
+  
+  TwilioAuthToken:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: Twilio Auth Token (optional)
+  
+  TwilioPhoneNumber:
+    Type: String
+    Default: ''
+    Description: Twilio Phone Number (optional)
+
+Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 60
+    MemorySize: 512
+    Environment:
+      Variables:
+        USERS_TABLE: !Ref UsersTable
+        FILES_BUCKET: !Ref FilesBucket
+        AWS_REGION_NAME: !Ref AWS::Region
+
+Resources:
+  # === DynamoDB ===
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub delta3-users-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # === S3 ===
+  FilesBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub delta3-files-${Environment}-${AWS::AccountId}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldFiles
+            Status: Enabled
+            ExpirationInDays: 90
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub delta3-frontend-${Environment}-${AWS::AccountId}
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub ${FrontendBucket.Arn}/*
+
+  # === API Gateway ===
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub delta3-api-${Environment}
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization,X-Session-Token,X-API-Key'"
+        AllowOrigin: "'*'"
+
+  # === Lambda Functions ===
+  AuthFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub delta3-auth-${Environment}
+      CodeUri: ../lambda/auth/
+      Handler: handler.handler
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+      Events:
+        Register:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /auth/register
+            Method: POST
+        Login:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /auth/login
+            Method: POST
+        Logout:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /auth/logout
+            Method: POST
+        Me:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /auth/me
+            Method: GET
+        GeminiKey:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /auth/gemini-key
+            Method: POST
+
+  ChatFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub delta3-chat-${Environment}
+      CodeUri: ../lambda/chat/
+      Handler: handler.handler
+      Timeout: 120
+      MemorySize: 1024
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+        - S3CrudPolicy:
+            BucketName: !Ref FilesBucket
+      Events:
+        Send:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /chat/send
+            Method: POST
+        History:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /chat/history
+            Method: GET
+        Clear:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /chat/clear
+            Method: POST
+        FilesList:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /files/list
+            Method: GET
+        FilesRead:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /files/read
+            Method: POST
+        FilesWrite:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /files/write
+            Method: POST
+        FilesDelete:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /files/delete
+            Method: POST
+
+  TwilioFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub delta3-twilio-${Environment}
+      CodeUri: ../lambda/twilio/
+      Handler: handler.handler
+      Timeout: 120
+      MemorySize: 1024
+      Environment:
+        Variables:
+          TWILIO_ACCOUNT_SID: !Ref TwilioAccountSid
+          TWILIO_AUTH_TOKEN: !Ref TwilioAuthToken
+          TWILIO_PHONE_NUMBER: !Ref TwilioPhoneNumber
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+        - S3CrudPolicy:
+            BucketName: !Ref FilesBucket
+      Events:
+        Webhook:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /twilio/webhook
+            Method: POST
+        Health:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /twilio/webhook
+            Method: GET
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}
+  
+  FrontendUrl:
+    Description: Frontend website URL
+    Value: !GetAtt FrontendBucket.WebsiteURL
+  
+  TwilioWebhook:
+    Description: Twilio webhook URL
+    Value: !Sub https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/twilio/webhook
+  
+  UsersTableName:
+    Description: DynamoDB users table name
+    Value: !Ref UsersTable
+  
+  FilesBucketName:
+    Description: S3 files bucket name
+    Value: !Ref FilesBucket
+  
+  FrontendBucketName:
+    Description: S3 frontend bucket name
+    Value: !Ref FrontendBucket
