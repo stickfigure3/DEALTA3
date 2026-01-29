@@ -69,25 +69,31 @@ def handler(event, context):
     # Route requests
     if path == "/chat/send" and method == "POST":
         return send_message(event, body)
-    
+
     elif path == "/chat/history" and method == "GET":
         return get_history(event)
-    
+
     elif path == "/chat/clear" and method == "POST":
         return clear_history(event)
-    
+
     elif path == "/files/list" and method == "GET":
         return list_files(event)
-    
+
     elif path == "/files/read" and method == "POST":
         return read_file(event, body)
-    
+
     elif path == "/files/write" and method == "POST":
         return write_file(event, body)
-    
+
     elif path == "/files/delete" and method == "POST":
         return delete_file(event, body)
-    
+
+    elif path == "/memories" and method == "GET":
+        return get_memories(event)
+
+    elif path == "/memories" and method == "DELETE":
+        return delete_memory(event, body)
+
     return response(404, {"error": "Not found"})
 
 
@@ -218,12 +224,44 @@ def delete_file(event: dict, body: dict):
     user_id, _, error = get_user_from_request(event)
     if error:
         return error
-    
+
     path = body.get("path", "")
     if not path:
         return response(400, {"error": "Path required"})
-    
+
     if storage.delete_file(user_id, path):
         return response(200, {"message": "File deleted", "path": path})
-    
+
     return response(500, {"error": "Failed to delete file"})
+
+
+def get_memories(event: dict):
+    """Get user's memories."""
+    user_id, _, error = get_user_from_request(event)
+    if error:
+        return error
+
+    # Get query parameters
+    params = event.get("queryStringParameters") or {}
+    category = params.get("category")
+    limit = int(params.get("limit", 50))
+
+    memories = storage.get_memories(user_id, category=category, limit=limit)
+
+    return response(200, {"memories": memories})
+
+
+def delete_memory(event: dict, body: dict):
+    """Delete a memory."""
+    user_id, _, error = get_user_from_request(event)
+    if error:
+        return error
+
+    memory_id = body.get("memory_id")
+
+    if not memory_id:
+        return response(400, {"error": "memory_id required"})
+
+    success = storage.delete_memory(user_id, memory_id)
+
+    return response(200, {"success": success})

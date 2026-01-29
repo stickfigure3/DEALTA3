@@ -738,6 +738,171 @@ a:hover {
     to { transform: rotate(360deg); }
 }
 
+/* === Memories Panel === */
+.memories-filters {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    overflow-x: auto;
+    flex-wrap: wrap;
+}
+
+.filter-btn {
+    padding: 6px 12px;
+    background: transparent;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 13px;
+    transition: var(--transition);
+    white-space: nowrap;
+}
+
+.filter-btn:hover {
+    border-color: var(--accent-primary);
+    color: var(--text-primary);
+}
+
+.filter-btn.active {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+    color: white;
+}
+
+.memories-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.memory-group {
+    border-bottom: 1px solid var(--border-color);
+}
+
+.memory-group-title {
+    padding: 12px 16px;
+    background: var(--bg-tertiary);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.memory-card {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border-color);
+    cursor: default;
+    transition: background-color var(--transition);
+}
+
+.memory-card:hover {
+    background: var(--bg-hover);
+}
+
+.memory-card:last-child {
+    border-bottom: none;
+}
+
+.memory-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+    gap: 8px;
+}
+
+.memory-content {
+    font-size: 13px;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    line-height: 1.4;
+    word-wrap: break-word;
+}
+
+.memory-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+.importance {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-align: center;
+    min-width: 40px;
+}
+
+.importance-10,
+.importance-9 {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+}
+
+.importance-8,
+.importance-7 {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+}
+
+.importance-6,
+.importance-5 {
+    background: rgba(96, 165, 250, 0.2);
+    color: #60a5fa;
+}
+
+.importance-4,
+.importance-3,
+.importance-2,
+.importance-1 {
+    background: rgba(107, 114, 128, 0.2);
+    color: #9ca3af;
+}
+
+.memory-tags {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin: 8px 0;
+}
+
+.tag {
+    display: inline-block;
+    padding: 2px 6px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
+.memory-delete-btn {
+    padding: 2px 6px;
+    background: transparent;
+    border: 1px solid var(--error);
+    color: var(--error);
+    border-radius: 4px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.memory-delete-btn:hover {
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.memory-date {
+    font-size: 11px;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
 /* === Responsive === */
 @media (max-width: 1024px) {
     .auth-features {

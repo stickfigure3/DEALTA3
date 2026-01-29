@@ -108,6 +108,12 @@
                     </div>
                 </div>
                 <div class="header-right">
+                    <button class="btn icon" id="memories-btn" title="Memories">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 21H3a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h18a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2z"></path>
+                            <path d="M7 10l5 5 5-5"></path>
+                        </svg>
+                    </button>
                     <button class="btn icon" id="files-btn" title="Files">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
@@ -193,6 +199,27 @@
                     </div>
                     <div class="setting-group">
                         <button class="btn secondary" id="clear-history-btn">Clear Chat History</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Memories Panel -->
+            <div class="panel memories-panel" id="memories-panel">
+                <div class="panel-header">
+                    <h3>Long-Term Memory</h3>
+                    <button class="btn icon close-panel">×</button>
+                </div>
+                <div class="memories-filters">
+                    <button class="filter-btn active" data-filter="all">All</button>
+                    <button class="filter-btn" data-filter="preference">Preferences</button>
+                    <button class="filter-btn" data-filter="fact">Facts</button>
+                    <button class="filter-btn" data-filter="context">Context</button>
+                    <button class="filter-btn" data-filter="skill">Skills</button>
+                    <button class="filter-btn" data-filter="project">Projects</button>
+                </div>
+                <div class="panel-content">
+                    <div class="memories-list" id="memories-list">
+                        <p class="empty-state">Loading memories...</p>
                     </div>
                 </div>
             </div>

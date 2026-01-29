@@ -1,0 +1,83 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#4a90d9', 'primaryTextColor': '#fff', 'primaryBorderColor': '#2d5a87', 'lineColor': '#5a5a5a', 'secondaryColor': '#f0f0f0', 'tertiaryColor': '#e8f4f8'}}}%%
+
+flowchart TB
+    subgraph Client["Client Layer (Local Machine)"]
+        direction TB
+        USER["👤 User (CLI)"]
+        AGENT["Delta3Agent<br/>(agent.py)"]
+        CLIENT["Delta3Client<br/>(HTTP Client)"]
+
+        USER -->|"request"| AGENT
+        AGENT -->|"HTTP calls"| CLIENT
+    end
+
+    subgraph External["External Services"]
+        direction TB
+        GEMINI["🤖 Google Gemini API<br/>(AI Model)"]
+        S3["☁️ AWS S3<br/>(Rootfs Storage)"]
+    end
+
+    subgraph Server["Server Layer (EC2 Instance)"]
+        direction TB
+
+        subgraph API["FastAPI Server (api.py :8000)"]
+            direction LR
+            AUTH["Auth Endpoints<br/>/auth/*"]
+            VM_EP["VM Endpoints<br/>/vm/*"]
+            EXEC_EP["Execute Endpoints<br/>/execute/*"]
+            FILE_EP["File Endpoints<br/>/files/*"]
+        end
+
+        subgraph Core["Core Services"]
+            direction TB
+            VM_MGR["VMManager<br/>(vm_manager.py)"]
+            JWT["JWT Auth<br/>(30-day tokens)"]
+            API_KEYS["API Key Store<br/>(delta3_*)"]
+        end
+    end
+
+    subgraph Infra["Infrastructure Layer"]
+        direction TB
+
+        subgraph VMs["Firecracker MicroVMs"]
+            direction LR
+            VM1["VM User A<br/>1 vCPU / 512MB"]
+            VM2["VM User B<br/>1 vCPU / 512MB"]
+            VM3["VM User N<br/>..."]
+        end
+
+        KERNEL["Linux Kernel<br/>(vmlinux)"]
+        ROOTFS["Base Rootfs<br/>(Ubuntu Bionic)"]
+    end
+
+    %% Client to External
+    AGENT <-->|"generate_content()<br/>tool calls"| GEMINI
+
+    %% Client to Server
+    CLIENT <-->|"REST API<br/>X-API-Key header"| API
+
+    %% Server Internal
+    AUTH --> JWT
+    AUTH --> API_KEYS
+    VM_EP --> VM_MGR
+    EXEC_EP --> VM_MGR
+    FILE_EP --> VM_MGR
+
+    %% Server to Infrastructure
+    VM_MGR -->|"create/start/stop"| VMs
+    VM_MGR <-->|"save/restore<br/>rootfs.ext4"| S3
+
+    %% Infrastructure Internal
+    VMs --> KERNEL
+    VMs --> ROOTFS
+
+    %% Styling
+    classDef clientStyle fill:#4a90d9,stroke:#2d5a87,color:#fff
+    classDef serverStyle fill:#5cb85c,stroke:#3d8b3d,color:#fff
+    classDef infraStyle fill:#f0ad4e,stroke:#c77c11,color:#fff
+    classDef externalStyle fill:#9b59b6,stroke:#6c3483,color:#fff
+
+    class USER,AGENT,CLIENT clientStyle
+    class AUTH,VM_EP,EXEC_EP,FILE_EP,VM_MGR,JWT,API_KEYS serverStyle
+    class VM1,VM2,VM3,KERNEL,ROOTFS infraStyle
+    class GEMINI,S3 externalStyle

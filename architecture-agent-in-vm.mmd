@@ -1,0 +1,104 @@
+%%{init: {'theme': 'base', 'themeVariables': { 'primaryColor': '#4a90d9', 'primaryTextColor': '#fff', 'primaryBorderColor': '#2d5a87', 'lineColor': '#5a5a5a', 'secondaryColor': '#f0f0f0', 'tertiaryColor': '#e8f4f8'}}}%%
+
+flowchart TB
+    subgraph Users["Users"]
+        direction LR
+        USER1["👤 User A<br/>(Web/Mobile/CLI)"]
+        USER2["👤 User B"]
+        USER3["👤 User N"]
+    end
+
+    subgraph External["External Services"]
+        GEMINI["🤖 Google Gemini API<br/>(AI Model)"]
+        S3["☁️ AWS S3<br/>(VM State Storage)"]
+    end
+
+    subgraph Server["API Gateway (EC2 Instance)"]
+        direction TB
+
+        subgraph Gateway["Public API Gateway (api.py :8000)"]
+            direction LR
+            AUTH["Auth Endpoints<br/>/auth/*"]
+            CHAT_EP["Chat Endpoint<br/>POST /chat"]
+            SESSION_EP["Session Endpoints<br/>/session/*"]
+            STREAM_EP["Stream Endpoint<br/>SSE /stream"]
+        end
+
+        subgraph Core["Core Services"]
+            direction TB
+            VM_MGR["VMManager<br/>(vm_manager.py)"]
+            ROUTER["Request Router<br/>(user → VM mapping)"]
+            JWT["JWT Auth"]
+        end
+    end
+
+    subgraph Infra["Infrastructure Layer (Firecracker MicroVMs)"]
+        direction TB
+
+        subgraph VM1["VM - User A"]
+            direction TB
+            AGENT1["🤖 Delta3Agent<br/>(AI Agent)"]
+            EXEC1["Code Executor<br/>(Python/Shell)"]
+            FS1["User Filesystem<br/>(/home/user)"]
+            AGENT1 -->|"execute"| EXEC1
+            AGENT1 -->|"read/write"| FS1
+        end
+
+        subgraph VM2["VM - User B"]
+            direction TB
+            AGENT2["🤖 Delta3Agent"]
+            EXEC2["Code Executor"]
+            FS2["User Filesystem"]
+            AGENT2 --> EXEC2
+            AGENT2 --> FS2
+        end
+
+        subgraph VM3["VM - User N"]
+            direction TB
+            AGENT3["🤖 Delta3Agent"]
+            EXEC3["Code Executor"]
+            FS3["User Filesystem"]
+            AGENT3 --> EXEC3
+            AGENT3 --> FS3
+        end
+    end
+
+    %% User to Gateway
+    USER1 -->|"POST /chat<br/>{message}"| Gateway
+    USER2 -->|"POST /chat"| Gateway
+    USER3 -->|"POST /chat"| Gateway
+
+    %% Gateway Auth & Routing
+    CHAT_EP --> JWT
+    CHAT_EP --> ROUTER
+    SESSION_EP --> VM_MGR
+    STREAM_EP --> ROUTER
+
+    %% Router to VMs
+    ROUTER -->|"route by user_id"| VM_MGR
+    VM_MGR -->|"forward request"| VM1
+    VM_MGR -->|"forward request"| VM2
+    VM_MGR -->|"forward request"| VM3
+
+    %% Agents to Gemini (outbound from VMs)
+    AGENT1 <-->|"generate_content()<br/>tool calls"| GEMINI
+    AGENT2 <-->|"generate_content()"| GEMINI
+    AGENT3 <-->|"generate_content()"| GEMINI
+
+    %% VM persistence
+    VM_MGR <-->|"save/restore<br/>VM state"| S3
+
+    %% Styling
+    classDef userStyle fill:#3498db,stroke:#2074a8,color:#fff
+    classDef gatewayStyle fill:#5cb85c,stroke:#3d8b3d,color:#fff
+    classDef coreStyle fill:#17a2b8,stroke:#117a8b,color:#fff
+    classDef vmStyle fill:#f0ad4e,stroke:#c77c11,color:#fff
+    classDef agentStyle fill:#e74c3c,stroke:#a93226,color:#fff
+    classDef externalStyle fill:#9b59b6,stroke:#6c3483,color:#fff
+
+    class USER1,USER2,USER3 userStyle
+    class AUTH,CHAT_EP,SESSION_EP,STREAM_EP gatewayStyle
+    class VM_MGR,ROUTER,JWT coreStyle
+    class EXEC1,EXEC2,EXEC3,FS1,FS2,FS3 vmStyle
+    class AGENT1,AGENT2,AGENT3 agentStyle
+    class GEMINI,S3 externalStyle

@@ -323,9 +323,11 @@ document.querySelectorAll('.suggestion').forEach(btn => {
 // === Panels ===
 const filesPanel = document.getElementById('files-panel');
 const settingsPanel = document.getElementById('settings-panel');
+const memoriesPanel = document.getElementById('memories-panel');
 
 document.getElementById('files-btn').addEventListener('click', () => {
     settingsPanel.classList.remove('active');
+    memoriesPanel.classList.remove('active');
     filesPanel.classList.toggle('active');
     if (filesPanel.classList.contains('active')) {
         loadFiles();
@@ -334,9 +336,19 @@ document.getElementById('files-btn').addEventListener('click', () => {
 
 document.getElementById('settings-btn').addEventListener('click', () => {
     filesPanel.classList.remove('active');
+    memoriesPanel.classList.remove('active');
     settingsPanel.classList.toggle('active');
     if (settingsPanel.classList.contains('active') && currentUser) {
         document.getElementById('api-key-display').textContent = currentUser.api_key || 'Not available';
+    }
+});
+
+document.getElementById('memories-btn').addEventListener('click', () => {
+    filesPanel.classList.remove('active');
+    settingsPanel.classList.remove('active');
+    memoriesPanel.classList.toggle('active');
+    if (memoriesPanel.classList.contains('active')) {
+        loadMemories('all');
     }
 });
 
@@ -344,6 +356,16 @@ document.querySelectorAll('.close-panel').forEach(btn => {
     btn.addEventListener('click', () => {
         filesPanel.classList.remove('active');
         settingsPanel.classList.remove('active');
+        memoriesPanel.classList.remove('active');
+    });
+});
+
+// Memory filter buttons
+document.querySelectorAll('.memories-filters .filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.memories-filters .filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        loadMemories(btn.dataset.filter);
     });
 });
 
@@ -426,6 +448,88 @@ async function loadFiles() {
     } catch (e) {
         filesList.innerHTML = `<p class="empty-state">Error loading files: ${e.message}</p>`;
     }
+}
+
+async function loadMemories(category) {
+    const memoriesList = document.getElementById('memories-list');
+
+    try {
+        memoriesList.innerHTML = '<p class="empty-state">Loading memories...</p>';
+
+        const query = category && category !== 'all' ? `?category=${category}` : '';
+        const data = await apiRequest(`/memories${query}`);
+
+        if (!data.memories || data.memories.length === 0) {
+            memoriesList.innerHTML = '<p class="empty-state">No memories yet. Start a conversation and I\'ll remember important information automatically!</p>';
+            return;
+        }
+
+        // Group memories by category
+        const grouped = {};
+        data.memories.forEach(mem => {
+            const cat = mem.category || 'other';
+            if (!grouped[cat]) grouped[cat] = [];
+            grouped[cat].push(mem);
+        });
+
+        // Render grouped memories
+        const html = Object.entries(grouped).map(([cat, mems]) => `
+            <div class="memory-group">
+                <div class="memory-group-title">${cat}</div>
+                ${mems.map(mem => `
+                    <div class="memory-card">
+                        <div class="memory-header">
+                            <span class="importance importance-${Math.round(mem.importance)}">${mem.importance}/10</span>
+                            <span class="memory-date">${new Date(mem.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <div class="memory-content">${escapeHtml(mem.content)}</div>
+                        ${mem.tags && mem.tags.length > 0 ? `
+                            <div class="memory-tags">
+                                ${mem.tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
+                            </div>
+                        ` : ''}
+                        <div class="memory-meta">
+                            <span>Used ${mem.access_count} times</span>
+                            <button class="memory-delete-btn" data-memory-id="${mem.memory_id}">Delete</button>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `).join('');
+
+        memoriesList.innerHTML = html;
+
+        // Add delete handlers
+        memoriesList.querySelectorAll('.memory-delete-btn').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const memoryId = btn.dataset.memoryId;
+                if (!confirm('Delete this memory?')) return;
+
+                try {
+                    await apiRequest('/memories', {
+                        method: 'DELETE',
+                        body: JSON.stringify({ memory_id: memoryId })
+                    });
+                    loadMemories(category);
+                } catch (e) {
+                    alert('Error deleting memory: ' + e.message);
+                }
+            });
+        });
+    } catch (e) {
+        memoriesList.innerHTML = `<p class="empty-state">Error loading memories: ${e.message}</p>`;
+    }
+}
+
+function escapeHtml(text) {
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, m => map[m]);
 }
 
 function formatSize(bytes) {

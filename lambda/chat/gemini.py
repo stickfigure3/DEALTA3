@@ -108,24 +108,142 @@ TOOLS = [
                     },
                     required=["path"]
                 )
+            ),
+            types.FunctionDeclaration(
+                name="store_memory",
+                description="Store important information to long-term memory. Use when the user shares preferences, facts, project context, or skills. Be selective - only store genuinely useful information.",
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "content": types.Schema(
+                            type=types.Type.STRING,
+                            description="The information to remember (be specific and clear)"
+                        ),
+                        "category": types.Schema(
+                            type=types.Type.STRING,
+                            description="Memory category: preference, fact, context, skill, or project"
+                        ),
+                        "importance": types.Schema(
+                            type=types.Type.INTEGER,
+                            description="Importance level 1-10 (10=critical, must always remember; 5=useful; 1=minor)"
+                        ),
+                        "tags": types.Schema(
+                            type=types.Type.ARRAY,
+                            description="Optional tags for categorization (e.g., ['python', 'coding_style'])",
+                            items=types.Schema(type=types.Type.STRING)
+                        )
+                    },
+                    required=["content", "category", "importance"]
+                )
+            ),
+            types.FunctionDeclaration(
+                name="search_memories",
+                description="Search long-term memory for relevant information. Use when you need context about the user's preferences, past projects, or specific facts.",
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "query": types.Schema(
+                            type=types.Type.STRING,
+                            description="What to search for (keyword search)"
+                        ),
+                        "category": types.Schema(
+                            type=types.Type.STRING,
+                            description="Optional: filter by category"
+                        ),
+                        "limit": types.Schema(
+                            type=types.Type.INTEGER,
+                            description="Maximum results to return (default: 5)"
+                        )
+                    },
+                    required=["query"]
+                )
+            ),
+            types.FunctionDeclaration(
+                name="list_memories",
+                description="List all memories, optionally filtered by category. Useful when user asks 'what do you remember about me?'",
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "category": types.Schema(
+                            type=types.Type.STRING,
+                            description="Optional category filter"
+                        ),
+                        "limit": types.Schema(
+                            type=types.Type.INTEGER,
+                            description="Maximum results (default: 20)"
+                        )
+                    },
+                    required=[]
+                )
+            ),
+            types.FunctionDeclaration(
+                name="update_memory",
+                description="Update an existing memory when information changes or user corrects something.",
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "memory_id": types.Schema(
+                            type=types.Type.STRING,
+                            description="ID of memory to update"
+                        ),
+                        "new_content": types.Schema(
+                            type=types.Type.STRING,
+                            description="Updated content"
+                        ),
+                        "importance": types.Schema(
+                            type=types.Type.INTEGER,
+                            description="Updated importance (optional)"
+                        )
+                    },
+                    required=["memory_id", "new_content"]
+                )
+            ),
+            types.FunctionDeclaration(
+                name="delete_memory",
+                description="Delete a memory. Use when user says 'forget about X' or information is no longer relevant.",
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "memory_id": types.Schema(
+                            type=types.Type.STRING,
+                            description="ID of memory to delete"
+                        )
+                    },
+                    required=["memory_id"]
+                )
             )
         ]
     )
 ]
 
-SYSTEM_PROMPT = """You are an AI coding assistant with a persistent workspace. You can execute Python code, run shell commands, and manage files.
+SYSTEM_PROMPT = """You are an AI coding assistant with a persistent workspace and long-term memory.
 
-IMPORTANT:
-1. Your workspace persists between sessions - files you create will be there next time
-2. Use write_file to save code, then execute_python or execute_shell to run it
-3. Use list_files to see what files already exist in your workspace
-4. Working directory is your personal workspace
+CAPABILITIES:
+1. Persistent workspace - files you create will be there next time
+2. Long-term memory - you can remember user preferences, facts, and context across sessions
+3. Code execution - run Python code and shell commands
 
-When asked to write code:
-1. First check if relevant files already exist with list_files
-2. Write the file with write_file
-3. Execute it with execute_python or execute_shell
-4. Report the results
+MEMORY USAGE:
+- Proactively store important information using store_memory (preferences, facts, context, skills, projects)
+- Be selective - only store genuinely useful information (importance 6+)
+- When users share preferences like "I prefer X" or "I use Y framework", store it immediately
+- Search memories when context would be helpful
+- Update memories when information changes
+
+WHEN TO STORE MEMORIES:
+✓ User preferences (coding style, tools, communication style)
+✓ User background (role, company, expertise level)
+✓ Project context (goals, constraints, architecture decisions)
+✓ User skills and knowledge level
+✗ Transient information (current task details, temporary notes)
+✗ Information already in conversation history
+
+CODING WORKFLOW:
+1. Check for relevant memories that might inform your approach
+2. First check if relevant files already exist with list_files
+3. Write the file with write_file
+4. Execute it with execute_python or execute_shell
+5. Report the results
 
 Always verify your work by checking outputs."""
 
@@ -351,11 +469,11 @@ class GeminiAgent:
         """Load previous chat history into Gemini context."""
         # Only load recent messages to stay within context limits
         recent = chat_history[-10:] if len(chat_history) > 10 else chat_history
-        
+
         for msg in recent:
             role = msg.get("role", "user")
             content = msg.get("content", "")
-            
+
             if role == "user":
                 self.history.append(types.Content(
                     role="user",
@@ -366,6 +484,64 @@ class GeminiAgent:
                     role="model",
                     parts=[types.Part.from_text(text=content)]
                 ))
+
+    def _load_memories(self) -> str:
+        """Load relevant memories and format for context injection."""
+        import storage
+        from datetime import datetime, timedelta
+
+        memories = []
+
+        # Load critical memories (importance >= 9)
+        critical = storage.get_memories(
+            self.user_id,
+            min_importance=9,
+            limit=5
+        )
+        memories.extend(critical)
+
+        # Load recent important memories (last 7 days, importance >= 6)
+        recent = storage.get_memories(
+            self.user_id,
+            min_importance=6,
+            limit=10
+        )
+        # Filter to last 7 days
+        week_ago = (datetime.utcnow() - timedelta(days=7)).isoformat()
+        recent = [m for m in recent if m.get("created_at", "") >= week_ago]
+        memories.extend(recent)
+
+        # Deduplicate by memory_id
+        seen = set()
+        unique_memories = []
+        for mem in memories:
+            if mem["memory_id"] not in seen:
+                seen.add(mem["memory_id"])
+                unique_memories.append(mem)
+
+        if not unique_memories:
+            return ""
+
+        # Format memories by category
+        by_category = {}
+        for mem in unique_memories:
+            cat = mem.get("category", "other")
+            if cat not in by_category:
+                by_category[cat] = []
+            by_category[cat].append(mem)
+
+        context_parts = ["=== LONG-TERM MEMORY ===",
+                         "You have the following information about this user:\n"]
+
+        for category, mems in sorted(by_category.items()):
+            context_parts.append(f"[{category.upper()}]")
+            for mem in sorted(mems, key=lambda m: m.get("importance", 0), reverse=True):
+                context_parts.append(f"- {mem['content']} (Importance: {mem['importance']})")
+            context_parts.append("")
+
+        context_parts.append("=== END MEMORY ===")
+
+        return "\n".join(context_parts)
     
     def execute_tool(self, name: str, args: Dict) -> str:
         """Execute a tool and return result as string."""
@@ -420,7 +596,84 @@ class GeminiAgent:
             if result["success"]:
                 return f"🗑️ Deleted: {result['path']}"
             return f"❌ Error: {result['error']}"
-        
+
+        elif name == "store_memory":
+            import storage
+            result = storage.save_memory(
+                self.user_id,
+                args["content"],
+                args["category"],
+                args["importance"],
+                args.get("tags", []),
+                source_context="Stored during conversation"
+            )
+            if result["success"]:
+                return f"✓ Memory stored (ID: {result['memory_id']})"
+            return f"Failed to store memory: {result.get('error', 'Unknown error')}"
+
+        elif name == "search_memories":
+            import storage
+            query = args["query"]
+            category = args.get("category")
+            limit = args.get("limit", 5)
+
+            memories = storage.search_memories(self.user_id, query, limit)
+
+            if not memories:
+                return "No matching memories found."
+
+            result = f"Found {len(memories)} memories:\n\n"
+            for mem in memories:
+                result += f"- [{mem['category']}] {mem['content']} (Importance: {mem['importance']}, ID: {mem['memory_id']})\n"
+
+            return result
+
+        elif name == "list_memories":
+            import storage
+            category = args.get("category")
+            limit = args.get("limit", 20)
+
+            memories = storage.get_memories(self.user_id, category=category, limit=limit)
+
+            if not memories:
+                return "No memories found."
+
+            result = f"Your memories ({len(memories)} total):\n\n"
+
+            # Group by category
+            by_category = {}
+            for mem in memories:
+                cat = mem.get("category", "other")
+                if cat not in by_category:
+                    by_category[cat] = []
+                by_category[cat].append(mem)
+
+            for cat, mems in sorted(by_category.items()):
+                result += f"\n[{cat.upper()}]\n"
+                for mem in mems:
+                    result += f"  - {mem['content']} (Importance: {mem['importance']}, ID: {mem['memory_id']})\n"
+
+            return result
+
+        elif name == "update_memory":
+            import storage
+            result = storage.update_memory(
+                self.user_id,
+                args["memory_id"],
+                args.get("new_content"),
+                args.get("importance")
+            )
+            if result["success"]:
+                return "✓ Memory updated"
+            return f"Failed to update memory: {result.get('error', 'Unknown error')}"
+
+        elif name == "delete_memory":
+            import storage
+            success = storage.delete_memory(self.user_id, args["memory_id"])
+            if success:
+                return "✓ Memory deleted"
+            return "Failed to delete memory"
+
         return f"Unknown tool: {name}"
     
     def process_message(self, user_message: str) -> Dict[str, Any]:
@@ -430,11 +683,17 @@ class GeminiAgent:
             role="user",
             parts=[types.Part.from_text(text=user_message)]
         ))
-        
+
         tool_calls = []
         max_iterations = 10
         final_text = ""
-        
+
+        # Load memories and create enhanced system prompt
+        memory_context = self._load_memories()
+        enhanced_prompt = SYSTEM_PROMPT
+        if memory_context:
+            enhanced_prompt += f"\n\n{memory_context}"
+
         for _ in range(max_iterations):
             # Generate response
             try:
@@ -443,7 +702,7 @@ class GeminiAgent:
                     contents=self.history,
                     config=types.GenerateContentConfig(
                         tools=TOOLS,
-                        system_instruction=SYSTEM_PROMPT
+                        system_instruction=enhanced_prompt
                     )
                 )
             except Exception as e:

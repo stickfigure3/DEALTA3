@@ -33,6 +33,7 @@ Globals:
       Variables:
         USERS_TABLE: !Ref UsersTable
         FILES_BUCKET: !Ref FilesBucket
+        MEMORIES_TABLE: !Ref MemoriesTable
         AWS_REGION_NAME: !Ref AWS::Region
 
 Resources:
@@ -48,6 +49,46 @@ Resources:
       KeySchema:
         - AttributeName: user_id
           KeyType: HASH
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  MemoriesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub delta3-memories-${Environment}
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: memory_id
+          AttributeType: S
+        - AttributeName: category
+          AttributeType: S
+        - AttributeName: importance
+          AttributeType: N
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+        - AttributeName: memory_id
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: CategoryIndex
+          KeySchema:
+            - AttributeName: user_id
+              KeyType: HASH
+            - AttributeName: category
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: ImportanceIndex
+          KeySchema:
+            - AttributeName: user_id
+              KeyType: HASH
+            - AttributeName: importance
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -162,6 +203,8 @@ Resources:
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref UsersTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref MemoriesTable
         - S3CrudPolicy:
             BucketName: !Ref FilesBucket
       Events:
@@ -207,6 +250,18 @@ Resources:
             RestApiId: !Ref ApiGateway
             Path: /files/delete
             Method: POST
+        MemoriesList:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /memories
+            Method: GET
+        MemoriesDelete:
+          Type: Api
+          Properties:
+            RestApiId: !Ref ApiGateway
+            Path: /memories
+            Method: DELETE
 
   TwilioFunction:
     Type: AWS::Serverless::Function
@@ -264,3 +319,7 @@ Outputs:
   FrontendBucketName:
     Description: S3 frontend bucket name
     Value: !Ref FrontendBucket
+
+  MemoriesTableName:
+    Description: DynamoDB memories table name
+    Value: !Ref MemoriesTable
