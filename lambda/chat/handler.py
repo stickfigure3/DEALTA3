@@ -102,19 +102,23 @@ def send_message(event: dict, body: dict):
         return response(400, {"error": "Message required"})
     
     try:
-        # Create agent with user's Gemini key
-        agent = GeminiAgent(api_key=gemini_key)
+        # Load chat history for context continuity
+        chat_history = storage.get_chat_history(user_id, limit=20)
         
-        # Load history for context (optional - for multi-turn)
-        # history = storage.get_chat_history(user_id, limit=10)
-        # for msg in history:
-        #     if msg["role"] == "user":
-        #         agent.history.append(...)
+        # Create agent with user's Gemini key, user_id, and history
+        # This will:
+        # 1. Restore user's files from S3 to /tmp workspace
+        # 2. Load previous chat context into Gemini
+        agent = GeminiAgent(
+            api_key=gemini_key,
+            user_id=user_id,
+            chat_history=chat_history
+        )
         
-        # Process message
+        # Process message (files created will auto-sync to S3)
         result = agent.process_message(message)
         
-        # Save to history
+        # Save to history for next session
         storage.save_chat_message(user_id, "user", message)
         storage.save_chat_message(
             user_id, 
@@ -129,7 +133,8 @@ def send_message(event: dict, body: dict):
         })
     
     except Exception as e:
-        return response(500, {"error": f"Chat error: {str(e)}"})
+        import traceback
+        return response(500, {"error": f"Chat error: {str(e)}", "trace": traceback.format_exc()})
 
 
 def get_history(event: dict):

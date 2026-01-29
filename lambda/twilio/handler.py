@@ -236,8 +236,15 @@ def handle_chat(user_id: str, message: str):
         ))
     
     try:
-        # Create agent and process message
-        agent = GeminiAgent(api_key=gemini_key)
+        # Load chat history for context
+        chat_history = storage.get_chat_history(user_id, limit=10)
+        
+        # Create agent with persistent environment
+        agent = GeminiAgent(
+            api_key=gemini_key,
+            user_id=user_id,
+            chat_history=chat_history
+        )
         result = agent.process_message(message)
         
         # Save to history
