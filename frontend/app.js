@@ -6,7 +6,7 @@
 // === Configuration ===
 const API_URL = window.location.hostname === 'localhost' 
     ? 'http://localhost:8000' 
-    : 'https://48dusd3qnj.execute-api.us-east-1.amazonaws.com/dev';
+    : 'https://iqp6z6nkif.execute-api.us-east-1.amazonaws.com/dev';
 
 // === State ===
 let sessionToken = localStorage.getItem('sessionToken');
