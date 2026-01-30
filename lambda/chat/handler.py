@@ -5,9 +5,18 @@ Handles chat messages and code execution via Gemini.
 
 import json
 import os
+from decimal import Decimal
 
 import storage
 from gemini import GeminiAgent
+
+
+class DecimalEncoder(json.JSONEncoder):
+    """Handle Decimal types from DynamoDB."""
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return int(obj) if obj % 1 == 0 else float(obj)
+        return super().default(obj)
 
 
 def response(status_code: int, body: dict) -> dict:
@@ -20,7 +29,7 @@ def response(status_code: int, body: dict) -> dict:
             "Access-Control-Allow-Headers": "Content-Type,Authorization,X-Session-Token,X-API-Key",
             "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS"
         },
-        "body": json.dumps(body)
+        "body": json.dumps(body, cls=DecimalEncoder)
     }
 
 
@@ -237,18 +246,22 @@ def delete_file(event: dict, body: dict):
 
 def get_memories(event: dict):
     """Get user's memories."""
-    user_id, _, error = get_user_from_request(event)
-    if error:
-        return error
+    try:
+        user_id, _, error = get_user_from_request(event)
+        if error:
+            return error
 
-    # Get query parameters
-    params = event.get("queryStringParameters") or {}
-    category = params.get("category")
-    limit = int(params.get("limit", 50))
+        # Get query parameters
+        params = event.get("queryStringParameters") or {}
+        category = params.get("category")
+        limit = int(params.get("limit", 50))
 
-    memories = storage.get_memories(user_id, category=category, limit=limit)
+        memories = storage.get_memories(user_id, category=category, limit=limit)
 
-    return response(200, {"memories": memories})
+        return response(200, {"memories": memories})
+    except Exception as e:
+        import traceback
+        return response(500, {"error": str(e), "trace": traceback.format_exc()})
 
 
 def delete_memory(event: dict, body: dict):
