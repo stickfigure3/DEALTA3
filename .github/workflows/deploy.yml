@@ -49,10 +49,19 @@ jobs:
             --no-fail-on-empty-changeset \
             --resolve-s3
 
+      - name: Deploy Frontend to S3
+        run: |
+          FRONTEND_BUCKET=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`FrontendBucketName`].OutputValue' \
+            --output text)
+          aws s3 sync frontend/ s3://$FRONTEND_BUCKET/
+          echo "🌐 Frontend deployed to: http://$FRONTEND_BUCKET.s3-website-${{ env.AWS_REGION }}.amazonaws.com"
+
       - name: Get API URL
         run: |
           API_URL=$(aws cloudformation describe-stacks \
             --stack-name ${{ env.STACK_NAME }} \
-            --query 'Stacks[0].Outputs[?OutputKey==`ApiUrl`].OutputValue' \
+            --query 'Stacks[0].Outputs[?OutputKey==`ApiEndpoint`].OutputValue' \
             --output text)
           echo "🚀 API deployed at: $API_URL"
