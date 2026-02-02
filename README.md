@@ -204,6 +204,19 @@ AI: [Uses read_file to see current code]
 
 ## Local Development
 
+Run the entire stack locally without AWS:
+
+```bash
+# Quick start
+./dev.sh
+```
+
+Visit http://localhost:3000 and login with `root`/`root`.
+
+**Full guide:** See [LOCAL_DEV.md](LOCAL_DEV.md) for complete setup instructions.
+
+### Manual Setup
+
 ```bash
 # Install dependencies
 python3 -m venv venv
@@ -212,15 +225,14 @@ pip install -r requirements.txt
 
 # Set environment variables
 cp env.example .env
-# Edit .env with your values
+# Edit .env with your Gemini API key
 
-# Run frontend locally
+# Start backend
+python local/server.py
+
+# In another terminal, start frontend
 cd frontend
 python3 -m http.server 3000
-
-# For Lambda testing, use SAM local
-cd infrastructure
-sam local start-api
 ```
 
 ## Cost Estimate
