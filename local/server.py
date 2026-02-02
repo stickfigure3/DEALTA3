@@ -533,26 +533,30 @@ def create_root_user():
     
     user_id = "root"  # Simple user ID for local dev
     
+    # Get Gemini key from environment variable (required for local dev)
+    gemini_key = os.environ.get("GEMINI_API_KEY")
+    
     if user_id not in users:
-        # Get Gemini key from environment or use the one from private_readme
-        gemini_key = os.environ.get("GEMINI_API_KEY", "AIzaSyCdFDftJrB8J1FO3XCtnvfkxSQo5I7o-cc")
-        
         users[user_id] = {
             "user_id": user_id,
             "email": user_id,  # Use same as user_id for simplicity
             "password_hash": hash_password("root"),
             "api_key": generate_api_key(),
-            "gemini_key": gemini_key,
+            "gemini_key": gemini_key,  # Will be None if not set
             "created_at": datetime.utcnow().isoformat(),
             "sessions": {}
         }
         
         save_users(users)
-        print("✅ Created root user (email: root, password: root)")
+        if gemini_key:
+            print("✅ Created root user (email: root, password: root, Gemini key: set)")
+        else:
+            print("✅ Created root user (email: root, password: root)")
+            print("⚠️  GEMINI_API_KEY not set - set it in .env or environment")
     else:
-        # Ensure Gemini key is set
-        if not users[user_id].get("gemini_key"):
-            users[user_id]["gemini_key"] = os.environ.get("GEMINI_API_KEY", "AIzaSyCdFDftJrB8J1FO3XCtnvfkxSQo5I7o-cc")
+        # Ensure Gemini key is updated from env if provided
+        if gemini_key and not users[user_id].get("gemini_key"):
+            users[user_id]["gemini_key"] = gemini_key
             save_users(users)
         print("ℹ️  Root user already exists")
 
