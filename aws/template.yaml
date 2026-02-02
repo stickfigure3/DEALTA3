@@ -8,6 +8,27 @@ Parameters:
     Default: dev
     AllowedValues: [dev, staging, prod]
   
+  # Existing resources (created outside CloudFormation or from previous deployment)
+  UsersTableName:
+    Type: String
+    Default: delta3-users-dev
+    Description: Existing DynamoDB table for users
+  
+  MemoriesTableName:
+    Type: String
+    Default: delta3-memories-dev
+    Description: Existing DynamoDB table for memories
+  
+  FilesBucketName:
+    Type: String
+    Default: delta3-files-dev-537124933816
+    Description: Existing S3 bucket for user files
+  
+  FrontendBucketName:
+    Type: String
+    Default: delta3-frontend-dev-537124933816
+    Description: Existing S3 bucket for frontend
+  
   TwilioAccountSid:
     Type: String
     Default: ''
@@ -31,114 +52,12 @@ Globals:
     MemorySize: 512
     Environment:
       Variables:
-        USERS_TABLE: !Ref UsersTable
-        FILES_BUCKET: !Ref FilesBucket
-        MEMORIES_TABLE: !Ref MemoriesTable
+        USERS_TABLE: !Ref UsersTableName
+        FILES_BUCKET: !Ref FilesBucketName
+        MEMORIES_TABLE: !Ref MemoriesTableName
         AWS_REGION_NAME: !Ref AWS::Region
 
 Resources:
-  # === DynamoDB ===
-  UsersTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: !Sub delta3-users-${Environment}
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: user_id
-          AttributeType: S
-      KeySchema:
-        - AttributeName: user_id
-          KeyType: HASH
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-
-  MemoriesTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      TableName: !Sub delta3-memories-${Environment}
-      BillingMode: PAY_PER_REQUEST
-      AttributeDefinitions:
-        - AttributeName: user_id
-          AttributeType: S
-        - AttributeName: memory_id
-          AttributeType: S
-        - AttributeName: category
-          AttributeType: S
-        - AttributeName: importance
-          AttributeType: N
-      KeySchema:
-        - AttributeName: user_id
-          KeyType: HASH
-        - AttributeName: memory_id
-          KeyType: RANGE
-      GlobalSecondaryIndexes:
-        - IndexName: CategoryIndex
-          KeySchema:
-            - AttributeName: user_id
-              KeyType: HASH
-            - AttributeName: category
-              KeyType: RANGE
-          Projection:
-            ProjectionType: ALL
-        - IndexName: ImportanceIndex
-          KeySchema:
-            - AttributeName: user_id
-              KeyType: HASH
-            - AttributeName: importance
-              KeyType: RANGE
-          Projection:
-            ProjectionType: ALL
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-
-  # === S3 ===
-  FilesBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub delta3-files-${Environment}-${AWS::AccountId}
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldFiles
-            Status: Enabled
-            ExpirationInDays: 90
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-
-  FrontendBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub delta3-frontend-${Environment}-${AWS::AccountId}
-      WebsiteConfiguration:
-        IndexDocument: index.html
-        ErrorDocument: index.html
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: false
-        BlockPublicPolicy: false
-        IgnorePublicAcls: false
-        RestrictPublicBuckets: false
-      Tags:
-        - Key: Environment
-          Value: !Ref Environment
-
-  FrontendBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref FrontendBucket
-      PolicyDocument:
-        Statement:
-          - Effect: Allow
-            Principal: '*'
-            Action: s3:GetObject
-            Resource: !Sub ${FrontendBucket.Arn}/*
-
   # === API Gateway ===
   ApiGateway:
     Type: AWS::Serverless::Api
@@ -159,7 +78,7 @@ Resources:
       Handler: handler.handler
       Policies:
         - DynamoDBCrudPolicy:
-            TableName: !Ref UsersTable
+            TableName: !Ref UsersTableName
       Events:
         Register:
           Type: Api
@@ -202,11 +121,11 @@ Resources:
       MemorySize: 1024
       Policies:
         - DynamoDBCrudPolicy:
-            TableName: !Ref UsersTable
+            TableName: !Ref UsersTableName
         - DynamoDBCrudPolicy:
-            TableName: !Ref MemoriesTable
+            TableName: !Ref MemoriesTableName
         - S3CrudPolicy:
-            BucketName: !Ref FilesBucket
+            BucketName: !Ref FilesBucketName
       Events:
         Send:
           Type: Api
@@ -278,9 +197,9 @@ Resources:
           TWILIO_PHONE_NUMBER: !Ref TwilioPhoneNumber
       Policies:
         - DynamoDBCrudPolicy:
-            TableName: !Ref UsersTable
+            TableName: !Ref UsersTableName
         - S3CrudPolicy:
-            BucketName: !Ref FilesBucket
+            BucketName: !Ref FilesBucketName
       Events:
         Webhook:
           Type: Api
@@ -302,7 +221,7 @@ Outputs:
   
   FrontendUrl:
     Description: Frontend website URL
-    Value: !GetAtt FrontendBucket.WebsiteURL
+    Value: !Sub http://${FrontendBucketName}.s3-website-${AWS::Region}.amazonaws.com
   
   TwilioWebhook:
     Description: Twilio webhook URL
@@ -310,16 +229,16 @@ Outputs:
   
   UsersTableName:
     Description: DynamoDB users table name
-    Value: !Ref UsersTable
+    Value: !Ref UsersTableName
   
   FilesBucketName:
     Description: S3 files bucket name
-    Value: !Ref FilesBucket
+    Value: !Ref FilesBucketName
   
   FrontendBucketName:
     Description: S3 frontend bucket name
-    Value: !Ref FrontendBucket
+    Value: !Ref FrontendBucketName
 
   MemoriesTableName:
     Description: DynamoDB memories table name
-    Value: !Ref MemoriesTable
+    Value: !Ref MemoriesTableName
