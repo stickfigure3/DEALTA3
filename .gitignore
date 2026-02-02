@@ -51,3 +51,6 @@ htmlcov/
 *.tmp
 *.temp
 .tmp/
+
+# Local development data
+local/data/
