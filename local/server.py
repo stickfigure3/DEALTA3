@@ -311,16 +311,14 @@ async def send_message(
             save_memories(memories)
             return True
     
-    # Create workspace directory for user
-    user_workspace = FILES_DIR / user_id.replace('@', '_').replace('.', '_')
-    user_workspace.mkdir(exist_ok=True)
-    
+    # Workspace directory will be created by the executor with "workspace_" prefix
+
     agent = GeminiAgent(
         api_key=user["gemini_key"],
         user_id=user_id,
         chat_history=chat_history[-20:],
         local_mode=True,
-        workspace_base=str(user_workspace.parent),
+        workspace_base=str(FILES_DIR),
         storage_module=LocalStorage()
     )
     
@@ -407,7 +405,8 @@ async def list_files(
         raise HTTPException(401, "Authentication required")
     
     user_id = user["user_id"]
-    user_dir = FILES_DIR / user_id.replace('@', '_').replace('.', '_')
+    safe_user_id = user_id.replace('@', '_').replace('.', '_')
+    user_dir = FILES_DIR / f"workspace_{safe_user_id}"
     
     if path:
         user_dir = user_dir / path.lstrip("/")
@@ -437,7 +436,8 @@ async def read_file(
         raise HTTPException(401, "Authentication required")
     
     user_id = user["user_id"]
-    file_path = FILES_DIR / user_id.replace('@', '_').replace('.', '_') / req.path.lstrip("/")
+    safe_user_id = user_id.replace('@', '_').replace('.', '_')
+    file_path = FILES_DIR / f"workspace_{safe_user_id}" / req.path.lstrip("/")
     
     if not file_path.exists():
         raise HTTPException(404, "File not found")
@@ -456,7 +456,8 @@ async def write_file(
         raise HTTPException(401, "Authentication required")
     
     user_id = user["user_id"]
-    file_path = FILES_DIR / user_id.replace('@', '_').replace('.', '_') / req.path.lstrip("/")
+    safe_user_id = user_id.replace('@', '_').replace('.', '_')
+    file_path = FILES_DIR / f"workspace_{safe_user_id}" / req.path.lstrip("/")
     
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_text(req.content)
@@ -475,7 +476,8 @@ async def delete_file(
         raise HTTPException(401, "Authentication required")
     
     user_id = user["user_id"]
-    file_path = FILES_DIR / user_id.replace('@', '_').replace('.', '_') / req.path.lstrip("/")
+    safe_user_id = user_id.replace('@', '_').replace('.', '_')
+    file_path = FILES_DIR / f"workspace_{safe_user_id}" / req.path.lstrip("/")
     
     if file_path.exists():
         file_path.unlink()
